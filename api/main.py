@@ -44,6 +44,10 @@ class NodeAssign(BaseModel):
     output_node: str | None = None
 
 
+class ScanRequest(BaseModel):
+    seconds: int = 6
+
+
 @app.get("/health")
 def health():
     return {"ok": True}
@@ -93,6 +97,15 @@ def bt_disconnect(payload: RoleRequest):
 def bt_reconnect_all():
     try:
         return bt.reconnect_all()
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/bt/scan")
+def bt_scan(payload: ScanRequest | None = None):
+    try:
+        seconds = payload.seconds if payload else 6
+        return {"devices": bt.scan(seconds=seconds)}
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 

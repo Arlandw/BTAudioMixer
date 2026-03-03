@@ -10,7 +10,9 @@ Mix two Bluetooth audio inputs (iPhone + Peloton) into one output stream for Blu
 - Assign/pair/connect controls via API
 - Basic audio gain controls for 2 inputs + master via PipeWire (`wpctl`)
 - Touchscreen-friendly web UI with:
-  - MAC assign fields
+  - Bluetooth scan mode (discover nearby devices)
+  - pick-from-list assignment (no manual MAC typing required)
+  - MAC assign fields (fallback)
   - Pair/connect buttons
   - 3 faders (phone/peloton/master)
   - per-source + master activity meters (active/idle visualizer)

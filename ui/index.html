@@ -66,6 +66,13 @@
   <body>
     <div class="wrap">
       <h1>BTAudioMixer</h1>
+      <div class="row">
+        <div class="card">
+          <h3>Device Discovery</h3>
+          <button class="btn" onclick="scanDevices()">Scan Nearby Bluetooth Devices</button>
+          <div class="small">Make sure iPhone/Peloton/headphones are in pairing mode.</div>
+        </div>
+      </div>
       <div class="row" id="roles"></div>
 
       <div class="card">
@@ -99,6 +106,7 @@
 
     <script>
       const roles = ['phone', 'peloton', 'headphones'];
+      let discoveredDevices = [];
 
       async function api(path, body) {
         const res = await fetch(path, {
@@ -116,10 +124,14 @@
       function roleCard(role, slot) {
         const connected = slot?.connected ? '✅ connected' : '❌ disconnected';
         const paired = slot?.paired ? 'paired' : 'not paired';
+        const options = ['<option value="">Select discovered device...</option>']
+          .concat(discoveredDevices.map((d) => `<option value="${d.mac}">${d.name} (${d.mac})</option>`))
+          .join('');
         return `
           <div class="card">
             <h3>${role}</h3>
             <div class="small">${connected} · ${paired}</div>
+            <select class="mac" id="pick-${role}" onchange="pickDevice('${role}')">${options}</select>
             <input class="mac" id="mac-${role}" value="${slot?.mac || ''}" placeholder="MAC address" />
             <div>
               <button class="btn" onclick="assignRole('${role}')">Assign</button>
@@ -181,6 +193,23 @@
           }
         });
       });
+
+      function pickDevice(role) {
+        const sel = document.getElementById(`pick-${role}`);
+        if (!sel || !sel.value) return;
+        document.getElementById(`mac-${role}`).value = sel.value;
+      }
+
+      async function scanDevices() {
+        try {
+          const data = await api('/bt/scan', { seconds: 8 });
+          discoveredDevices = data.devices || [];
+          await refresh();
+          document.getElementById('error').textContent = `Found ${discoveredDevices.length} device(s)`;
+        } catch (e) {
+          document.getElementById('error').textContent = `Scan failed: ${e.message || e}`;
+        }
+      }
 
       async function assignRole(role) {
         const mac = document.getElementById(`mac-${role}`).value.trim();

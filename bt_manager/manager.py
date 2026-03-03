@@ -14,6 +14,7 @@ import os
 import subprocess
 from pathlib import Path
 from typing import Any
+import re
 
 
 DEFAULT_CONFIG_PATH = Path(os.getenv("BTMIXER_CONFIG", "./config/devices.json"))
@@ -129,6 +130,32 @@ class BTManager:
             slot.paired = bool(info.get("paired"))
             slot.alias = info.get("alias") or slot.alias
         return self.status()
+
+    def scan(self, seconds: int = 6) -> list[dict[str, str]]:
+        """Scan nearby devices and return [{mac,name}]."""
+        seconds = max(2, min(int(seconds), 20))
+        # Use shell timeout for bounded scan window.
+        cmd = (
+            f"timeout {seconds}s bluetoothctl --timeout {seconds} scan on >/tmp/bt_scan.out 2>&1; "
+            "bluetoothctl devices"
+        )
+        result = subprocess.run(["bash", "-lc", cmd], capture_output=True, text=True, check=False)
+        if result.returncode != 0 and not result.stdout.strip():
+            raise RuntimeError(result.stderr.strip() or "Bluetooth scan failed")
+
+        devices: list[dict[str, str]] = []
+        seen: set[str] = set()
+        for line in result.stdout.splitlines():
+            # Device AA:BB:CC:DD:EE:FF Name Here
+            m = re.match(r"^Device\s+([0-9A-Fa-f:]{17})\s+(.+)$", line.strip())
+            if not m:
+                continue
+            mac, name = m.group(1).upper(), m.group(2).strip()
+            if mac in seen:
+                continue
+            seen.add(mac)
+            devices.append({"mac": mac, "name": name})
+        return devices
 
     def status(self) -> dict[str, Any]:
         return {
