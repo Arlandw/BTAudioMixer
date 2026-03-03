@@ -55,6 +55,7 @@ class AudioEngine:
         return {
             "phone_active": self._is_node_running(self.state.phone_node),
             "peloton_active": self._is_node_running(self.state.peloton_node),
+            "master_active": self._is_node_running(self.state.output_node),
         }
 
     def _set_node_volume(self, node_name: str | None, value: float) -> None:
