@@ -107,6 +107,11 @@ def audio_nodes(payload: NodeAssign):
     return audio.set_nodes(payload.phone_node, payload.peloton_node, payload.output_node)
 
 
+@app.get("/audio/activity")
+def audio_activity():
+    return audio.activity()
+
+
 app.mount("/ui", StaticFiles(directory="ui", html=True), name="ui")
 
 

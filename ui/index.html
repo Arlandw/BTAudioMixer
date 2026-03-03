@@ -36,6 +36,20 @@
       .fader { width: 30%; min-width: 160px; text-align: center; }
       input[type='range'] { width: 100%; height: 36px; }
       .value { font-size: 20px; margin-top: 6px; }
+      .meter {
+        margin-top: 8px;
+        height: 12px;
+        border-radius: 999px;
+        background: #0b0f1c;
+        border: 1px solid #3f4a75;
+        overflow: hidden;
+      }
+      .meterFill {
+        width: 0%;
+        height: 100%;
+        background: linear-gradient(90deg, #13d37a 0%, #66f09f 70%, #ffd166 100%);
+        transition: width 180ms linear;
+      }
       .mac {
         width: 100%;
         margin-top: 8px;
@@ -60,11 +74,13 @@
             <h3>Phone</h3>
             <input id="phoneGain" type="range" min="0" max="1" step="0.01" value="0.5" />
             <div class="value" id="phoneGainVal">50%</div>
+            <div class="meter"><div class="meterFill" id="phoneMeter"></div></div>
           </div>
           <div class="fader">
             <h3>Peloton</h3>
             <input id="pelotonGain" type="range" min="0" max="1" step="0.01" value="0.5" />
             <div class="value" id="pelotonGainVal">50%</div>
+            <div class="meter"><div class="meterFill" id="pelotonMeter"></div></div>
           </div>
           <div class="fader">
             <h3>Master</h3>
@@ -127,6 +143,28 @@
         }
       }
 
+      function setMeter(id, active) {
+        const el = document.getElementById(id);
+        if (!el) return;
+        if (!active) {
+          el.style.width = '0%';
+          return;
+        }
+        const val = 35 + Math.round(Math.random() * 55);
+        el.style.width = `${val}%`;
+      }
+
+      async function refreshActivity() {
+        try {
+          const data = await api('/audio/activity');
+          setMeter('phoneMeter', data.phone_active);
+          setMeter('pelotonMeter', data.peloton_active);
+        } catch {
+          setMeter('phoneMeter', false);
+          setMeter('pelotonMeter', false);
+        }
+      }
+
       function setSlider(id, value) {
         const el = document.getElementById(id);
         el.value = value;
@@ -174,7 +212,9 @@
       }
 
       refresh();
+      refreshActivity();
       setInterval(refresh, 5000);
+      setInterval(refreshActivity, 400);
     </script>
   </body>
 </html>

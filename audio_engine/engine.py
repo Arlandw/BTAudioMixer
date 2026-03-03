@@ -3,6 +3,7 @@
 Phase 1 implementation:
 - track two input gains + master
 - apply volume by PipeWire node name via `wpctl`
+- expose lightweight source activity state (running/idle)
 - keep state in-memory for UI/API use
 """
 
@@ -11,6 +12,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 import subprocess
 from typing import Any
+import re
 
 
 @dataclass
@@ -49,10 +51,28 @@ class AudioEngine:
     def status(self) -> dict[str, Any]:
         return asdict(self.state)
 
+    def activity(self) -> dict[str, Any]:
+        return {
+            "phone_active": self._is_node_running(self.state.phone_node),
+            "peloton_active": self._is_node_running(self.state.peloton_node),
+        }
+
     def _set_node_volume(self, node_name: str | None, value: float) -> None:
         if not node_name:
             return
         subprocess.run(["wpctl", "set-volume", node_name, f"{value:.3f}"], check=False)
+
+    def _is_node_running(self, node_name: str | None) -> bool:
+        if not node_name:
+            return False
+        result = subprocess.run(["wpctl", "inspect", node_name], capture_output=True, text=True, check=False)
+        if result.returncode != 0:
+            return False
+        text = result.stdout.lower()
+        if "state" in text and "running" in text:
+            return True
+        # fallback for some pipewire versions
+        return bool(re.search(r"\bactive\b", text))
 
     @staticmethod
     def _clamp(value: float) -> float:
