@@ -100,6 +100,21 @@ class BTManager:
         self.refresh_status()
         return self.status()
 
+    def quick_connect(self, role: str) -> dict[str, Any]:
+        """One-tap flow for assigned device: trust/pair/connect best-effort."""
+        slot = self._slot(role)
+        self._require_mac(slot)
+        self._run_btctl([
+            "power on",
+            "agent on",
+            "default-agent",
+            f"trust {slot.mac}",
+            f"pair {slot.mac}",
+            f"connect {slot.mac}",
+        ])
+        self.refresh_status()
+        return self.status()
+
     def disconnect(self, role: str) -> dict[str, Any]:
         slot = self._slot(role)
         self._require_mac(slot)

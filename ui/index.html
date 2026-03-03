@@ -137,6 +137,7 @@
               <button class="btn" onclick="assignRole('${role}')">Assign</button>
               <button class="btn" onclick="pairRole('${role}')">Pair</button>
               <button class="btn" onclick="connectRole('${role}')">Connect</button>
+              <button class="btn" onclick="quickConnectRole('${role}')">Assign + Pair + Connect</button>
             </div>
           </div>
         `;
@@ -224,6 +225,12 @@
 
       async function connectRole(role) {
         await api('/bt/connect', { role });
+        await refresh();
+      }
+
+      async function quickConnectRole(role) {
+        const mac = document.getElementById(`mac-${role}`).value.trim() || null;
+        await api('/bt/quick-connect', { role, mac });
         await refresh();
       }
 

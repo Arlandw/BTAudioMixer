@@ -38,6 +38,11 @@ class RoleRequest(BaseModel):
     role: str
 
 
+class QuickConnectRequest(BaseModel):
+    role: str
+    mac: str | None = None
+
+
 class NodeAssign(BaseModel):
     phone_node: str | None = None
     peloton_node: str | None = None
@@ -81,6 +86,16 @@ def bt_pair(payload: RoleRequest):
 def bt_connect(payload: RoleRequest):
     try:
         return bt.connect(payload.role)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/bt/quick-connect")
+def bt_quick_connect(payload: QuickConnectRequest):
+    try:
+        if payload.mac:
+            bt.assign_role(payload.role, payload.mac)
+        return bt.quick_connect(payload.role)
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
