@@ -49,12 +49,10 @@ class BTManager:
         self.refresh_status()
 
     def _run_btctl(self, commands: list[str], controller: str | None = None) -> str:
-        script = "\n".join(commands + ["quit", ""])
-        cmd = ["bluetoothctl"]
-        if controller:
-            cmd += ["--controller", controller]
+        prefixed = [f"select {controller}"] + commands if controller else commands
+        script = "\n".join(prefixed + ["quit", ""])
         result = subprocess.run(
-            cmd,
+            ["bluetoothctl"],
             input=script,
             text=True,
             capture_output=True,
