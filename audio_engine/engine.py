@@ -15,6 +15,7 @@ from typing import Any
 import re
 import math
 import shlex
+import struct
 
 
 @dataclass
@@ -140,7 +141,7 @@ class AudioEngine:
             return None
         target = shlex.quote(str(node_name))
         cmd = (
-            f"timeout 0.25s pw-record --target {target} --format s16 --rate 16000 --channels 1 - 2>/dev/null "
+            f"timeout 0.25s pw-record --target {target} --format f32 --rate 16000 --channels 1 - 2>/dev/null "
             "| head -c 4096"
         )
         res = subprocess.run(["bash", "-lc", cmd], capture_output=True, check=False)
@@ -148,15 +149,21 @@ class AudioEngine:
         if len(raw) < 4:
             return None
 
-        # little-endian signed 16-bit mono
-        samples = []
-        for i in range(0, len(raw) - 1, 2):
-            v = int.from_bytes(raw[i:i+2], byteorder="little", signed=True)
-            samples.append(v / 32768.0)
+        # little-endian float32 mono
+        usable = len(raw) - (len(raw) % 4)
+        if usable < 8:
+            return None
+        try:
+            samples = list(struct.unpack("<" + "f" * (usable // 4), raw[:usable]))
+        except struct.error:
+            return None
         if not samples:
             return None
 
-        # Remove DC offset so constant bias/noise floor doesn't look like active audio.
+        # sanitize and remove DC offset so constant bias/noise floor doesn't look active.
+        samples = [s for s in samples if math.isfinite(s)]
+        if not samples:
+            return None
         mean = sum(samples) / len(samples)
         centered = [s - mean for s in samples]
         variance = sum(s * s for s in centered) / len(centered)
