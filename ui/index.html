@@ -247,25 +247,22 @@
           const peloton = (levels.peloton_level ?? null);
           const master = (levels.master_level ?? null);
 
-          // If node is mapped but sampler returns null, treat as silence (0), not connected-animated fallback.
-          setMeter('phoneMeter', phone ?? (audio.phone_node ? 0 : !!latestBluetooth?.phone?.connected));
-          setMeter('pelotonMeter', peloton ?? (audio.peloton_node ? 0 : !!latestBluetooth?.peloton?.connected));
-          setMeter('masterMeter', master ?? (audio.output_node ? 0 : !!latestBluetooth?.headphones?.connected));
+          // Strict mode: if no sampled level, render silence (0). Connection is shown in status text only.
+          setMeter('phoneMeter', phone ?? 0);
+          setMeter('pelotonMeter', peloton ?? 0);
+          setMeter('masterMeter', master ?? 0);
           return;
         } catch {}
 
         try {
           const data = await api('/audio/activity');
-          const phoneActive = data.phone_active || !!latestBluetooth?.phone?.connected;
-          const pelotonActive = data.peloton_active || !!latestBluetooth?.peloton?.connected;
-          const masterActive = data.master_active || !!latestBluetooth?.headphones?.connected;
-          setMeter('phoneMeter', phoneActive);
-          setMeter('pelotonMeter', pelotonActive);
-          setMeter('masterMeter', masterActive);
+          setMeter('phoneMeter', !!data.phone_active);
+          setMeter('pelotonMeter', !!data.peloton_active);
+          setMeter('masterMeter', !!data.master_active);
         } catch {
-          setMeter('phoneMeter', !!latestBluetooth?.phone?.connected);
-          setMeter('pelotonMeter', !!latestBluetooth?.peloton?.connected);
-          setMeter('masterMeter', !!latestBluetooth?.headphones?.connected);
+          setMeter('phoneMeter', 0);
+          setMeter('pelotonMeter', 0);
+          setMeter('masterMeter', 0);
         }
       }
 
