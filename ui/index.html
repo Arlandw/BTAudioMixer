@@ -213,9 +213,9 @@
       async function refreshActivity() {
         try {
           const levels = await api('/audio/levels');
-          setMeter('phoneMeter', levels.phone_level ?? (latestBluetooth?.phone?.connected ? 0.2 : 0));
-          setMeter('pelotonMeter', levels.peloton_level ?? (latestBluetooth?.peloton?.connected ? 0.2 : 0));
-          setMeter('masterMeter', levels.master_level ?? (latestBluetooth?.headphones?.connected ? 0.2 : 0));
+          setMeter('phoneMeter', levels.phone_level ?? !!latestBluetooth?.phone?.connected);
+          setMeter('pelotonMeter', levels.peloton_level ?? !!latestBluetooth?.peloton?.connected);
+          setMeter('masterMeter', levels.master_level ?? !!latestBluetooth?.headphones?.connected);
         } catch {
           try {
             const data = await api('/audio/activity');
