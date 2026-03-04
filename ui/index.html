@@ -198,7 +198,10 @@
         const el = document.getElementById(id);
         if (!el) return;
         if (typeof valueOrActive === 'number') {
-          const val = Math.max(0, Math.min(100, Math.round(valueOrActive * 100)));
+          // Add slight wobble so low-variance RMS still looks alive on UI
+          const wobble = (Math.random() * 8) - 4; // -4..+4
+          const base = valueOrActive * 100;
+          const val = Math.max(0, Math.min(100, Math.round(base + wobble)));
           el.style.width = `${val}%`;
           return;
         }
