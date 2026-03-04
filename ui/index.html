@@ -107,6 +107,7 @@
     <script>
       const roles = ['phone', 'peloton', 'headphones'];
       let discoveredDevices = [];
+      const draftMacs = { phone: '', peloton: '', headphones: '' };
 
       async function api(path, body) {
         const res = await fetch(path, {
@@ -132,7 +133,7 @@
             <h3>${role}</h3>
             <div class="small">${connected} · ${paired}</div>
             <select class="mac" id="pick-${role}" onchange="pickDevice('${role}')">${options}</select>
-            <input class="mac" id="mac-${role}" value="${slot?.mac || ''}" placeholder="MAC address" />
+            <input class="mac" id="mac-${role}" value="${slot?.mac || draftMacs[role] || ''}" placeholder="MAC address" oninput="updateDraftMac('${role}')" />
             <div>
               <button class="btn" onclick="assignRole('${role}')">Assign</button>
               <button class="btn" onclick="pairRole('${role}')">Pair</button>
@@ -146,6 +147,9 @@
       async function refresh() {
         try {
           const data = await api('/status');
+          roles.forEach((r) => {
+            if (data.bluetooth?.[r]?.mac) draftMacs[r] = data.bluetooth[r].mac;
+          });
           document.getElementById('roles').innerHTML = roles.map((r) => roleCard(r, data.bluetooth[r])).join('');
 
           setSlider('phoneGain', data.audio.phone_gain ?? 0.5);
@@ -195,9 +199,16 @@
         });
       });
 
+      function updateDraftMac(role) {
+        const input = document.getElementById(`mac-${role}`);
+        if (!input) return;
+        draftMacs[role] = input.value.trim();
+      }
+
       function pickDevice(role) {
         const sel = document.getElementById(`pick-${role}`);
         if (!sel || !sel.value) return;
+        draftMacs[role] = sel.value;
         document.getElementById(`mac-${role}`).value = sel.value;
       }
 
@@ -214,6 +225,7 @@
 
       async function assignRole(role) {
         const mac = document.getElementById(`mac-${role}`).value.trim();
+        draftMacs[role] = mac;
         await api('/bt/assign', { role, mac });
         await refresh();
       }
