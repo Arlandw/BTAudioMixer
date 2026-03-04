@@ -210,16 +210,35 @@ class BTManager:
 
     def enable_pairing_mode(self, seconds: int = 120) -> dict[str, Any]:
         seconds = max(15, min(int(seconds), 300))
-        cmd = (
-            "bluetoothctl power on; "
-            "bluetoothctl pairable on; "
-            "bluetoothctl discoverable on; "
-            f"sleep {seconds}; "
-            "bluetoothctl pairable off; "
-            "bluetoothctl discoverable off"
-        )
-        subprocess.Popen(["bash", "-lc", cmd])
-        return {"pairing_mode": True, "seconds": seconds}
+        controllers = [c["mac"] for c in self.controllers()]
+        if not controllers:
+            # fallback default controller path
+            cmd = (
+                "bluetoothctl power on; "
+                "bluetoothctl pairable on; "
+                "bluetoothctl discoverable on; "
+                f"sleep {seconds}; "
+                "bluetoothctl pairable off; "
+                "bluetoothctl discoverable off"
+            )
+            subprocess.Popen(["bash", "-lc", cmd])
+            return {"pairing_mode": True, "seconds": seconds, "controllers": []}
+
+        for ctrl in controllers:
+            self._run_btctl(["power on", "pairable on", "discoverable on"], controller=ctrl)
+
+        def disable_all() -> None:
+            import time
+            time.sleep(seconds)
+            for ctrl in controllers:
+                try:
+                    self._run_btctl(["pairable off", "discoverable off"], controller=ctrl)
+                except Exception:
+                    pass
+
+        import threading
+        threading.Thread(target=disable_all, daemon=True).start()
+        return {"pairing_mode": True, "seconds": seconds, "controllers": controllers}
 
     def scan(self, seconds: int = 6) -> list[dict[str, str]]:
         seconds = max(2, min(int(seconds), 20))
