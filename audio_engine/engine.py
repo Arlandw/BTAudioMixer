@@ -112,6 +112,7 @@ class AudioEngine:
         raw = res.stdout or b""
         if len(raw) < 4:
             return None
+
         # little-endian signed 16-bit mono
         samples = []
         for i in range(0, len(raw) - 1, 2):
@@ -119,10 +120,21 @@ class AudioEngine:
             samples.append(v / 32768.0)
         if not samples:
             return None
-        rms = math.sqrt(sum(s * s for s in samples) / len(samples))
-        # normalize for UI readability
-        level = max(0.0, min(1.0, rms * 8.0))
-        return level
+
+        # Remove DC offset so constant bias/noise floor doesn't look like active audio.
+        mean = sum(samples) / len(samples)
+        variance = sum((s - mean) ** 2 for s in samples) / len(samples)
+        rms = math.sqrt(variance)
+
+        # Convert to dBFS and gate low-level noise.
+        db = 20.0 * math.log10(max(rms, 1e-6))
+        min_db = -45.0
+        max_db = 0.0
+        if db <= min_db:
+            return 0.0
+
+        level = (db - min_db) / (max_db - min_db)
+        return max(0.0, min(1.0, level))
 
     def _is_node_running(self, node_name: str | None) -> bool:
         if not node_name:
