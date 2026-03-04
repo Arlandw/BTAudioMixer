@@ -46,9 +46,43 @@ class AudioEngine:
                         return m.group(1)
             return None
 
-        phone_node = pick(["iphone", "ios", "phone"])
+        # Pull connected Bluetooth MACs to match bluez_input lines reliably
+        bt = subprocess.run(["bluetoothctl", "devices", "Connected"], capture_output=True, text=True, check=False)
+        connected_macs = []
+        if bt.returncode == 0:
+            for line in bt.stdout.splitlines():
+                m = re.match(r"^Device\s+([0-9A-Fa-f:]{17})\s+", line.strip())
+                if m:
+                    connected_macs.append(m.group(1).replace(":", "_").lower())
+
+        phone_node = None
+        for line in lines:
+            l = line.lower()
+            if "bluez_input." not in l:
+                continue
+            if connected_macs and not any(mac in l for mac in connected_macs):
+                continue
+            m = re.search(r"\b(\d+)\.\s", line)
+            if m:
+                phone_node = m.group(1)
+                break
+
+        if phone_node is None:
+            phone_node = pick(["bluez_input", "iphone", "ios", "phone"])
+
         peloton_node = pick(["peloton"])
-        output_node = pick(["airpods", "headphones", "buds"])
+
+        # Output defaults to active sink; fallback to named headphone sinks.
+        output_node = None
+        for line in lines:
+            if "sinks:" in line.lower():
+                continue
+            m = re.search(r"\*\s*(\d+)\.\s", line)
+            if m:
+                output_node = m.group(1)
+                break
+        if output_node is None:
+            output_node = pick(["bluez_output", "airpods", "headphones", "buds", "auto_null"])
 
         if phone_node:
             self.state.phone_node = phone_node
