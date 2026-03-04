@@ -112,11 +112,16 @@
       let discoveredDevices = [];
       let latestBluetooth = {};
       const draftMacs = { phone: '', peloton: '', headphones: '' };
+      let suspendRefreshUntil = 0;
       const meterDynamics = {
         phoneMeter: { lastRaw: null, hold: 0, smooth: 0 },
         pelotonMeter: { lastRaw: null, hold: 0, smooth: 0 },
         masterMeter: { lastRaw: null, hold: 0, smooth: 0 },
       };
+
+      function pauseRefresh(ms = 8000) {
+        suspendRefreshUntil = Date.now() + ms;
+      }
 
       async function api(path, body) {
         const res = await fetch(path, {
@@ -175,14 +180,15 @@
           <div class="card">
             <h3>${role}</h3>
             <div class="small">${connected} · ${paired}</div>
-            <select class="mac" id="pick-${role}" onchange="pickDevice('${role}')">${options}</select>
-            <input class="mac" id="mac-${role}" value="${slot?.mac || draftMacs[role] || ''}" placeholder="MAC address" oninput="updateDraftMac('${role}')" />
+            <select class="mac" id="pick-${role}" onchange="pickDevice('${role}')" onfocus="pauseRefresh(12000)" onmousedown="pauseRefresh(12000)" ontouchstart="pauseRefresh(12000)">${options}</select>
+            <input class="mac" id="mac-${role}" value="${slot?.mac || draftMacs[role] || ''}" placeholder="MAC address" oninput="updateDraftMac('${role}')" onfocus="pauseRefresh(12000)" />
             <div>${actions}</div>
           </div>
         `;
       }
 
       async function refresh() {
+        if (Date.now() < suspendRefreshUntil) return;
         try {
           const data = await api('/status');
           latestBluetooth = data.bluetooth || {};
