@@ -110,6 +110,7 @@
     <script>
       const roles = ['phone', 'peloton', 'headphones'];
       let discoveredDevices = [];
+      let latestBluetooth = {};
       const draftMacs = { phone: '', peloton: '', headphones: '' };
 
       async function api(path, body) {
@@ -156,7 +157,7 @@
         const actions = isInput
           ? `
             <button class="btn" onclick="assignRole('${role}', this)">Save Device</button>
-            <div class="small">Connect this from your ${role} Bluetooth settings (not from this app).</div>
+            <div class="small">Pair/connect from ${role} settings directly to this mixer.</div>
           `
           : `
             <button class="btn" onclick="assignRole('${role}', this)">Assign</button>
@@ -179,6 +180,7 @@
       async function refresh() {
         try {
           const data = await api('/status');
+          latestBluetooth = data.bluetooth || {};
           roles.forEach((r) => {
             if (data.bluetooth?.[r]?.mac) draftMacs[r] = data.bluetooth[r].mac;
           });
@@ -206,13 +208,16 @@
       async function refreshActivity() {
         try {
           const data = await api('/audio/activity');
-          setMeter('phoneMeter', data.phone_active);
-          setMeter('pelotonMeter', data.peloton_active);
-          setMeter('masterMeter', data.master_active);
+          const phoneActive = data.phone_active || !!latestBluetooth?.phone?.connected;
+          const pelotonActive = data.peloton_active || !!latestBluetooth?.peloton?.connected;
+          const masterActive = data.master_active || !!latestBluetooth?.headphones?.connected;
+          setMeter('phoneMeter', phoneActive);
+          setMeter('pelotonMeter', pelotonActive);
+          setMeter('masterMeter', masterActive);
         } catch {
-          setMeter('phoneMeter', false);
-          setMeter('pelotonMeter', false);
-          setMeter('masterMeter', false);
+          setMeter('phoneMeter', !!latestBluetooth?.phone?.connected);
+          setMeter('pelotonMeter', !!latestBluetooth?.peloton?.connected);
+          setMeter('masterMeter', !!latestBluetooth?.headphones?.connected);
         }
       }
 

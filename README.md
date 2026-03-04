@@ -17,7 +17,7 @@ Mix two Bluetooth audio inputs (iPhone + Peloton) into one output stream for Blu
   - MAC assign fields (fallback)
   - Pair/connect buttons
   - 3 faders (phone/peloton/master)
-  - per-source + master activity meters (active/idle visualizer)
+  - per-source + master activity meters (activity + connection fallback)
   - 2 presets (Ride / Podcast Focus)
 
 ## Repo layout
