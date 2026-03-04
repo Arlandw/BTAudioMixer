@@ -140,12 +140,22 @@ class AudioEngine:
         if not node_name:
             return None
         target = shlex.quote(str(node_name))
-        cmd = (
-            f"timeout 0.25s pw-record --target {target} --format f32 --rate 16000 --channels 1 - 2>/dev/null "
-            "| head -c 4096"
-        )
-        res = subprocess.run(["bash", "-lc", cmd], capture_output=True, check=False)
-        raw = res.stdout or b""
+        cmds = [
+            (
+                f"timeout 0.25s pw-cat --record --target {target} --format f32 --rate 16000 --channels 1 - 2>/dev/null "
+                "| head -c 4096"
+            ),
+            (
+                f"timeout 0.25s pw-record --target {target} --format f32 --rate 16000 --channels 1 - 2>/dev/null "
+                "| head -c 4096"
+            ),
+        ]
+        raw = b""
+        for cmd in cmds:
+            res = subprocess.run(["bash", "-lc", cmd], capture_output=True, check=False)
+            if res.stdout:
+                raw = res.stdout
+                break
         if len(raw) < 4:
             return None
 
@@ -171,11 +181,11 @@ class AudioEngine:
         peak = max(abs(s) for s in centered)
 
         # Hard gate for idle/noise floor.
-        if peak < 0.004 and rms < 0.0015:
+        if peak < 0.0008 and rms < 0.00025:
             level_raw = 0.0
         else:
             # Blend RMS + peak for visibly responsive meters without constant saturation.
-            level_raw = max(rms * 8.0, peak * 2.5)
+            level_raw = max(rms * 18.0, peak * 4.5)
 
         key = str(node_name)
         prev = self._level_smooth.get(key, 0.0)
