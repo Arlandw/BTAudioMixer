@@ -162,8 +162,8 @@ class AudioEngine:
 
         # Convert to dBFS and gate low-level noise.
         db = 20.0 * math.log10(max(rms, 1e-6))
-        min_db = -35.0
-        max_db = 0.0
+        min_db = -45.0
+        max_db = -12.0
         if db <= min_db:
             return 0.0
 
