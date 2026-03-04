@@ -30,6 +30,7 @@ class AudioState:
 class AudioEngine:
     def __init__(self) -> None:
         self.state = AudioState()
+        self._noise_floor_db: dict[str, float] = {}
 
     def discover_nodes(self) -> dict[str, Any]:
         result = subprocess.run(["wpctl", "status", "--name"], capture_output=True, text=True, check=False)
@@ -160,14 +161,29 @@ class AudioEngine:
         variance = sum((s - mean) ** 2 for s in samples) / len(samples)
         rms = math.sqrt(variance)
 
-        # Convert to dBFS and gate low-level noise.
+        # Convert to dBFS.
         db = 20.0 * math.log10(max(rms, 1e-6))
-        min_db = -50.0
-        max_db = -18.0
-        if db <= min_db:
+
+        # Adaptive per-node noise floor tracking.
+        key = str(node_name)
+        floor = self._noise_floor_db.get(key)
+        if floor is None:
+            floor = db
+        # Track downward quickly (new quieter floor), upward slowly.
+        if db < floor:
+            floor = db
+        else:
+            floor = (floor * 0.98) + (db * 0.02)
+        self._noise_floor_db[key] = floor
+
+        # Dynamic gate relative to floor.
+        gate_db = floor + 3.0
+        if db <= gate_db:
             return 0.0
 
-        level = (db - min_db) / (max_db - min_db)
+        # Dynamic range mapping above gate.
+        max_db = gate_db + 18.0
+        level = (db - gate_db) / (max_db - gate_db)
         return max(0.0, min(1.0, level))
 
     def _is_node_running(self, node_name: str | None) -> bool:
