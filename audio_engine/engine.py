@@ -30,7 +30,7 @@ class AudioState:
 class AudioEngine:
     def __init__(self) -> None:
         self.state = AudioState()
-        self._noise_floor_db: dict[str, float] = {}
+        self._level_smooth: dict[str, float] = {}
 
     def discover_nodes(self) -> dict[str, Any]:
         result = subprocess.run(["wpctl", "status", "--name"], capture_output=True, text=True, check=False)
@@ -158,33 +158,28 @@ class AudioEngine:
 
         # Remove DC offset so constant bias/noise floor doesn't look like active audio.
         mean = sum(samples) / len(samples)
-        variance = sum((s - mean) ** 2 for s in samples) / len(samples)
+        centered = [s - mean for s in samples]
+        variance = sum(s * s for s in centered) / len(centered)
         rms = math.sqrt(variance)
+        peak = max(abs(s) for s in centered)
 
-        # Convert to dBFS.
-        db = 20.0 * math.log10(max(rms, 1e-6))
-
-        # Adaptive per-node noise floor tracking.
-        key = str(node_name)
-        floor = self._noise_floor_db.get(key)
-        if floor is None:
-            floor = db
-        # Track downward quickly (new quieter floor), upward slowly.
-        if db < floor:
-            floor = db
+        # Hard gate for idle/noise floor.
+        if peak < 0.004 and rms < 0.0015:
+            level_raw = 0.0
         else:
-            floor = (floor * 0.98) + (db * 0.02)
-        self._noise_floor_db[key] = floor
+            # Blend RMS + peak for visibly responsive meters.
+            level_raw = max(rms * 28.0, peak * 7.0)
 
-        # Dynamic gate relative to floor.
-        gate_db = floor + 3.0
-        if db <= gate_db:
-            return 0.0
-
-        # Dynamic range mapping above gate.
-        max_db = gate_db + 18.0
-        level = (db - gate_db) / (max_db - gate_db)
-        return max(0.0, min(1.0, level))
+        key = str(node_name)
+        prev = self._level_smooth.get(key, 0.0)
+        # Attack faster, release slower for natural meter motion.
+        if level_raw > prev:
+            smooth = prev * 0.45 + level_raw * 0.55
+        else:
+            smooth = prev * 0.82 + level_raw * 0.18
+        smooth = max(0.0, min(1.0, smooth))
+        self._level_smooth[key] = smooth
+        return smooth
 
     def _is_node_running(self, node_name: str | None) -> bool:
         if not node_name:
