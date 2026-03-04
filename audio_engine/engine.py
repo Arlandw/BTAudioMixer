@@ -13,6 +13,8 @@ from dataclasses import asdict, dataclass
 import subprocess
 from typing import Any
 import re
+import math
+import shlex
 
 
 @dataclass
@@ -86,10 +88,41 @@ class AudioEngine:
             "master_active": self._is_node_running(self.state.output_node),
         }
 
+    def levels(self) -> dict[str, float | None]:
+        return {
+            "phone_level": self._sample_level(self.state.phone_node),
+            "peloton_level": self._sample_level(self.state.peloton_node),
+            "master_level": self._sample_level(self.state.output_node),
+        }
+
     def _set_node_volume(self, node_name: str | None, value: float) -> None:
         if not node_name:
             return
         subprocess.run(["wpctl", "set-volume", node_name, f"{value:.3f}"], check=False)
+
+    def _sample_level(self, node_name: str | None) -> float | None:
+        if not node_name:
+            return None
+        target = shlex.quote(str(node_name))
+        cmd = (
+            f"timeout 0.25s pw-record --target {target} --format s16 --rate 16000 --channels 1 - 2>/dev/null "
+            "| head -c 4096"
+        )
+        res = subprocess.run(["bash", "-lc", cmd], capture_output=True, check=False)
+        raw = res.stdout or b""
+        if len(raw) < 4:
+            return None
+        # little-endian signed 16-bit mono
+        samples = []
+        for i in range(0, len(raw) - 1, 2):
+            v = int.from_bytes(raw[i:i+2], byteorder="little", signed=True)
+            samples.append(v / 32768.0)
+        if not samples:
+            return None
+        rms = math.sqrt(sum(s * s for s in samples) / len(samples))
+        # normalize for UI readability
+        level = max(0.0, min(1.0, rms * 8.0))
+        return level
 
     def _is_node_running(self, node_name: str | None) -> bool:
         if not node_name:

@@ -133,17 +133,47 @@ class BTManager:
         self.refresh_status()
         return self.status()
 
+    def _connected_devices(self) -> list[dict[str, str]]:
+        out = self._run_btctl(["devices Connected"])
+        devices: list[dict[str, str]] = []
+        for line in out.splitlines():
+            m = re.match(r"^Device\s+([0-9A-Fa-f:]{17})\s+(.+)$", line.strip())
+            if m:
+                devices.append({"mac": m.group(1).upper(), "name": m.group(2).strip()})
+        return devices
+
     def refresh_status(self) -> dict[str, Any]:
+        connected_devices = self._connected_devices()
+        connected_macs = {d["mac"] for d in connected_devices}
+
         for slot in (self.phone, self.peloton, self.headphones):
-            if not slot.mac:
-                continue
-            try:
-                info = self._parse_info(self._device_info(slot.mac))
-            except RuntimeError:
-                continue
-            slot.connected = bool(info.get("connected"))
-            slot.paired = bool(info.get("paired"))
-            slot.alias = info.get("alias") or slot.alias
+            if slot.mac:
+                try:
+                    info = self._parse_info(self._device_info(slot.mac))
+                    slot.paired = bool(info.get("paired"))
+                    slot.alias = info.get("alias") or slot.alias
+                except RuntimeError:
+                    pass
+                slot.connected = slot.mac.upper() in connected_macs
+            else:
+                slot.connected = False
+
+            # fallback: alias-name match when MAC rotates/randomizes (common on phones)
+            if not slot.connected and slot.alias:
+                slot.connected = any(slot.alias.lower() in d["name"].lower() for d in connected_devices)
+
+            # best-effort role inference when no MAC saved yet
+            if not slot.connected and not slot.mac:
+                keywords = {
+                    "phone": ["iphone", "ios", "phone"],
+                    "peloton": ["peloton"],
+                    "headphones": ["airpods", "headphone", "buds"],
+                }[slot.name]
+                match = next((d for d in connected_devices if any(k in d["name"].lower() for k in keywords)), None)
+                if match:
+                    slot.connected = True
+                    slot.alias = match["name"]
+
         return self.status()
 
     def enable_pairing_mode(self, seconds: int = 120) -> dict[str, Any]:
@@ -190,6 +220,7 @@ class BTManager:
             "phone": asdict(self.phone),
             "peloton": asdict(self.peloton),
             "headphones": asdict(self.headphones),
+            "connected_devices": self._connected_devices(),
         }
 
     def _slot(self, role: str) -> DeviceRole:

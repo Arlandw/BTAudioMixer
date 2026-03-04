@@ -194,30 +194,42 @@
         }
       }
 
-      function setMeter(id, active) {
+      function setMeter(id, valueOrActive) {
         const el = document.getElementById(id);
         if (!el) return;
-        if (!active) {
+        if (typeof valueOrActive === 'number') {
+          const val = Math.max(0, Math.min(100, Math.round(valueOrActive * 100)));
+          el.style.width = `${val}%`;
+          return;
+        }
+        if (!valueOrActive) {
           el.style.width = '0%';
           return;
         }
-        const val = 35 + Math.round(Math.random() * 55);
+        const val = 22 + Math.round(Math.random() * 20);
         el.style.width = `${val}%`;
       }
 
       async function refreshActivity() {
         try {
-          const data = await api('/audio/activity');
-          const phoneActive = data.phone_active || !!latestBluetooth?.phone?.connected;
-          const pelotonActive = data.peloton_active || !!latestBluetooth?.peloton?.connected;
-          const masterActive = data.master_active || !!latestBluetooth?.headphones?.connected;
-          setMeter('phoneMeter', phoneActive);
-          setMeter('pelotonMeter', pelotonActive);
-          setMeter('masterMeter', masterActive);
+          const levels = await api('/audio/levels');
+          setMeter('phoneMeter', levels.phone_level ?? (latestBluetooth?.phone?.connected ? 0.2 : 0));
+          setMeter('pelotonMeter', levels.peloton_level ?? (latestBluetooth?.peloton?.connected ? 0.2 : 0));
+          setMeter('masterMeter', levels.master_level ?? (latestBluetooth?.headphones?.connected ? 0.2 : 0));
         } catch {
-          setMeter('phoneMeter', !!latestBluetooth?.phone?.connected);
-          setMeter('pelotonMeter', !!latestBluetooth?.peloton?.connected);
-          setMeter('masterMeter', !!latestBluetooth?.headphones?.connected);
+          try {
+            const data = await api('/audio/activity');
+            const phoneActive = data.phone_active || !!latestBluetooth?.phone?.connected;
+            const pelotonActive = data.peloton_active || !!latestBluetooth?.peloton?.connected;
+            const masterActive = data.master_active || !!latestBluetooth?.headphones?.connected;
+            setMeter('phoneMeter', phoneActive);
+            setMeter('pelotonMeter', pelotonActive);
+            setMeter('masterMeter', masterActive);
+          } catch {
+            setMeter('phoneMeter', !!latestBluetooth?.phone?.connected);
+            setMeter('pelotonMeter', !!latestBluetooth?.peloton?.connected);
+            setMeter('masterMeter', !!latestBluetooth?.headphones?.connected);
+          }
         }
       }
 

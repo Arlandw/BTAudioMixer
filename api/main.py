@@ -161,6 +161,11 @@ def audio_activity():
     return audio.activity()
 
 
+@app.get("/audio/levels")
+def audio_levels():
+    return audio.levels()
+
+
 app.mount("/ui", StaticFiles(directory="ui", html=True), name="ui")
 
 
