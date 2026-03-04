@@ -12,7 +12,8 @@ Mix two Bluetooth audio inputs (iPhone + Peloton) into one output stream for Blu
 - Touchscreen-friendly web UI with:
   - Bluetooth scan mode (discover nearby devices)
   - pick-from-list assignment (no manual MAC typing required)
-  - one-tap per-role flow: Assign + Pair + Connect
+  - one-tap per-role flow: Assign + Pair + Connect (headphones/output)
+  - mixer pairing mode button for inbound phone/peloton pairing
   - MAC assign fields (fallback)
   - Pair/connect buttons
   - 3 faders (phone/peloton/master)

@@ -146,6 +146,19 @@ class BTManager:
             slot.alias = info.get("alias") or slot.alias
         return self.status()
 
+    def enable_pairing_mode(self, seconds: int = 120) -> dict[str, Any]:
+        seconds = max(15, min(int(seconds), 300))
+        cmd = (
+            "bluetoothctl power on; "
+            "bluetoothctl pairable on; "
+            "bluetoothctl discoverable on; "
+            f"sleep {seconds}; "
+            "bluetoothctl pairable off; "
+            "bluetoothctl discoverable off"
+        )
+        subprocess.Popen(["bash", "-lc", cmd])
+        return {"pairing_mode": True, "seconds": seconds}
+
     def scan(self, seconds: int = 6) -> list[dict[str, str]]:
         """Scan nearby devices and return [{mac,name}]."""
         seconds = max(2, min(int(seconds), 20))

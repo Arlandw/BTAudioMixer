@@ -69,8 +69,9 @@
       <div class="row">
         <div class="card">
           <h3>Device Discovery</h3>
+          <button class="btn" onclick="enablePairingMode()">Enable Mixer Pairing Mode (120s)</button>
           <button class="btn" onclick="scanDevices()">Scan Nearby Bluetooth Devices</button>
-          <div class="small">Make sure iPhone/Peloton/headphones are in pairing mode.</div>
+          <div class="small">For phone/peloton: enable pairing mode here, then connect from those devices to this mixer.</div>
         </div>
       </div>
       <div class="row" id="roles"></div>
@@ -128,18 +129,27 @@
         const options = ['<option value="">Select discovered device...</option>']
           .concat(discoveredDevices.map((d) => `<option value="${d.mac}">${d.name} (${d.mac})</option>`))
           .join('');
+
+        const isInput = role === 'phone' || role === 'peloton';
+        const actions = isInput
+          ? `
+            <button class="btn" onclick="assignRole('${role}')">Save Device</button>
+            <div class="small">Connect this from your ${role} Bluetooth settings (not from this app).</div>
+          `
+          : `
+            <button class="btn" onclick="assignRole('${role}')">Assign</button>
+            <button class="btn" onclick="pairRole('${role}')">Pair</button>
+            <button class="btn" onclick="connectRole('${role}')">Connect</button>
+            <button class="btn" onclick="quickConnectRole('${role}')">Assign + Pair + Connect</button>
+          `;
+
         return `
           <div class="card">
             <h3>${role}</h3>
             <div class="small">${connected} · ${paired}</div>
             <select class="mac" id="pick-${role}" onchange="pickDevice('${role}')">${options}</select>
             <input class="mac" id="mac-${role}" value="${slot?.mac || draftMacs[role] || ''}" placeholder="MAC address" oninput="updateDraftMac('${role}')" />
-            <div>
-              <button class="btn" onclick="assignRole('${role}')">Assign</button>
-              <button class="btn" onclick="pairRole('${role}')">Pair</button>
-              <button class="btn" onclick="connectRole('${role}')">Connect</button>
-              <button class="btn" onclick="quickConnectRole('${role}')">Assign + Pair + Connect</button>
-            </div>
+            <div>${actions}</div>
           </div>
         `;
       }
@@ -210,6 +220,15 @@
         if (!sel || !sel.value) return;
         draftMacs[role] = sel.value;
         document.getElementById(`mac-${role}`).value = sel.value;
+      }
+
+      async function enablePairingMode() {
+        try {
+          const data = await api('/bt/pairing-mode', { seconds: 120 });
+          document.getElementById('error').textContent = `Mixer pairing mode enabled for ${data.seconds}s`;
+        } catch (e) {
+          document.getElementById('error').textContent = `Pairing mode failed: ${e.message || e}`;
+        }
       }
 
       async function scanDevices() {
