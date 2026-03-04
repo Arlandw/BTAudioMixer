@@ -181,19 +181,27 @@ class AudioEngine:
         peak = max(abs(s) for s in centered)
 
         # Hard gate for idle/noise floor.
-        if peak < 0.0008 and rms < 0.00025:
+        # PipeWire-native peak meter derived directly from captured monitor samples.
+        # Convert peak amplitude to dBFS and map to UI range.
+        peak_db = 20.0 * math.log10(max(peak, 1e-9))
+
+        # Meter range: silence below -78 dBFS, clip-like near -6 dBFS.
+        min_db = -78.0
+        max_db = -6.0
+        if peak_db <= min_db:
             level_raw = 0.0
         else:
-            # Blend RMS + peak for visibly responsive meters without constant saturation.
-            level_raw = max(rms * 18.0, peak * 4.5)
+            level_raw = (peak_db - min_db) / (max_db - min_db)
+
+        level_raw = max(0.0, min(1.0, level_raw))
 
         key = str(node_name)
         prev = self._level_smooth.get(key, 0.0)
         # Attack faster, release slower for natural meter motion.
         if level_raw > prev:
-            smooth = prev * 0.45 + level_raw * 0.55
+            smooth = prev * 0.35 + level_raw * 0.65
         else:
-            smooth = prev * 0.82 + level_raw * 0.18
+            smooth = prev * 0.88 + level_raw * 0.12
         smooth = max(0.0, min(1.0, smooth))
         self._level_smooth[key] = smooth
         return smooth
