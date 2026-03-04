@@ -31,6 +31,7 @@
         margin-right: 8px;
         margin-top: 8px;
       }
+      .btn:disabled { opacity: 0.6; }
       .status { font-size: 14px; opacity: 0.9; margin-top: 8px; }
       .faders { display: flex; gap: 20px; justify-content: center; }
       .fader { width: 30%; min-width: 160px; text-align: center; }
@@ -69,8 +70,9 @@
       <div class="row">
         <div class="card">
           <h3>Device Discovery</h3>
-          <button class="btn" onclick="enablePairingMode()">Enable Mixer Pairing Mode (120s)</button>
-          <button class="btn" onclick="scanDevices()">Scan Nearby Bluetooth Devices</button>
+          <button class="btn" onclick="enablePairingMode(this)">Enable Mixer Pairing Mode (120s)</button>
+          <button class="btn" onclick="scanDevices(this)">Scan Nearby Bluetooth Devices</button>
+          <button class="btn" onclick="discoverNodes(this)">Bind Active Nodes</button>
           <div class="small">For phone/peloton: enable pairing mode here, then connect from those devices to this mixer.</div>
         </div>
       </div>
@@ -123,6 +125,26 @@
         return res.json();
       }
 
+      function setStatus(msg) {
+        document.getElementById('error').textContent = msg;
+      }
+
+      async function withButton(btn, label, fn) {
+        const prev = btn ? btn.textContent : '';
+        try {
+          if (btn) {
+            btn.disabled = true;
+            btn.textContent = label;
+          }
+          await fn();
+        } finally {
+          if (btn) {
+            btn.disabled = false;
+            btn.textContent = prev;
+          }
+        }
+      }
+
       function roleCard(role, slot) {
         const connected = slot?.connected ? '✅ connected' : '❌ disconnected';
         const paired = slot?.paired ? 'paired' : 'not paired';
@@ -133,14 +155,14 @@
         const isInput = role === 'phone' || role === 'peloton';
         const actions = isInput
           ? `
-            <button class="btn" onclick="assignRole('${role}')">Save Device</button>
+            <button class="btn" onclick="assignRole('${role}', this)">Save Device</button>
             <div class="small">Connect this from your ${role} Bluetooth settings (not from this app).</div>
           `
           : `
-            <button class="btn" onclick="assignRole('${role}')">Assign</button>
-            <button class="btn" onclick="pairRole('${role}')">Pair</button>
-            <button class="btn" onclick="connectRole('${role}')">Connect</button>
-            <button class="btn" onclick="quickConnectRole('${role}')">Assign + Pair + Connect</button>
+            <button class="btn" onclick="assignRole('${role}', this)">Assign</button>
+            <button class="btn" onclick="pairRole('${role}', this)">Pair</button>
+            <button class="btn" onclick="connectRole('${role}', this)">Connect</button>
+            <button class="btn" onclick="quickConnectRole('${role}', this)">Assign + Pair + Connect</button>
           `;
 
         return `
@@ -165,7 +187,6 @@
           setSlider('phoneGain', data.audio.phone_gain ?? 0.5);
           setSlider('pelotonGain', data.audio.peloton_gain ?? 0.5);
           setSlider('masterGain', data.audio.master_gain ?? 0.8);
-          document.getElementById('error').textContent = '';
         } catch (e) {
           document.getElementById('error').textContent = String(e.message || e);
         }
@@ -222,47 +243,75 @@
         document.getElementById(`mac-${role}`).value = sel.value;
       }
 
-      async function enablePairingMode() {
-        try {
-          const data = await api('/bt/pairing-mode', { seconds: 120 });
-          document.getElementById('error').textContent = `Mixer pairing mode enabled for ${data.seconds}s`;
-        } catch (e) {
-          document.getElementById('error').textContent = `Pairing mode failed: ${e.message || e}`;
-        }
+      async function enablePairingMode(btn) {
+        await withButton(btn, 'Enabling...', async () => {
+          try {
+            const data = await api('/bt/pairing-mode', { seconds: 120 });
+            setStatus(`Mixer pairing mode enabled for ${data.seconds}s`);
+          } catch (e) {
+            setStatus(`Pairing mode failed: ${e.message || e}`);
+          }
+        });
       }
 
-      async function scanDevices() {
-        try {
-          const data = await api('/bt/scan', { seconds: 8 });
-          discoveredDevices = data.devices || [];
+      async function discoverNodes(btn) {
+        await withButton(btn, 'Binding...', async () => {
+          try {
+            await api('/audio/discover-nodes', {});
+            setStatus('Bound active nodes. Visualizers should now respond to audio activity.');
+            await refresh();
+          } catch (e) {
+            setStatus(`Node bind failed: ${e.message || e}`);
+          }
+        });
+      }
+
+      async function scanDevices(btn) {
+        await withButton(btn, 'Scanning...', async () => {
+          try {
+            const data = await api('/bt/scan', { seconds: 8 });
+            discoveredDevices = data.devices || [];
+            await refresh();
+            setStatus(`Found ${discoveredDevices.length} device(s)`);
+          } catch (e) {
+            setStatus(`Scan failed: ${e.message || e}`);
+          }
+        });
+      }
+
+      async function assignRole(role, btn) {
+        await withButton(btn, 'Saving...', async () => {
+          const mac = document.getElementById(`mac-${role}`).value.trim();
+          draftMacs[role] = mac;
+          await api('/bt/assign', { role, mac });
+          setStatus(`${role} saved.`);
           await refresh();
-          document.getElementById('error').textContent = `Found ${discoveredDevices.length} device(s)`;
-        } catch (e) {
-          document.getElementById('error').textContent = `Scan failed: ${e.message || e}`;
-        }
+        });
       }
 
-      async function assignRole(role) {
-        const mac = document.getElementById(`mac-${role}`).value.trim();
-        draftMacs[role] = mac;
-        await api('/bt/assign', { role, mac });
-        await refresh();
+      async function pairRole(role, btn) {
+        await withButton(btn, 'Pairing...', async () => {
+          await api('/bt/pair', { role });
+          setStatus(`${role} paired.`);
+          await refresh();
+        });
       }
 
-      async function pairRole(role) {
-        await api('/bt/pair', { role });
-        await refresh();
+      async function connectRole(role, btn) {
+        await withButton(btn, 'Connecting...', async () => {
+          await api('/bt/connect', { role });
+          setStatus(`${role} connect requested.`);
+          await refresh();
+        });
       }
 
-      async function connectRole(role) {
-        await api('/bt/connect', { role });
-        await refresh();
-      }
-
-      async function quickConnectRole(role) {
-        const mac = document.getElementById(`mac-${role}`).value.trim() || null;
-        await api('/bt/quick-connect', { role, mac });
-        await refresh();
+      async function quickConnectRole(role, btn) {
+        await withButton(btn, 'Working...', async () => {
+          const mac = document.getElementById(`mac-${role}`).value.trim() || null;
+          await api('/bt/quick-connect', { role, mac });
+          setStatus(`${role} assign/pair/connect requested.`);
+          await refresh();
+        });
       }
 
       async function saveGains() {

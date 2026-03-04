@@ -148,6 +148,14 @@ def audio_nodes(payload: NodeAssign):
     return audio.set_nodes(payload.phone_node, payload.peloton_node, payload.output_node)
 
 
+@app.post("/audio/discover-nodes")
+def audio_discover_nodes():
+    try:
+        return audio.discover_nodes()
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 @app.get("/audio/activity")
 def audio_activity():
     return audio.activity()

@@ -29,6 +29,34 @@ class AudioEngine:
     def __init__(self) -> None:
         self.state = AudioState()
 
+    def discover_nodes(self) -> dict[str, Any]:
+        result = subprocess.run(["wpctl", "status", "--name"], capture_output=True, text=True, check=False)
+        if result.returncode != 0:
+            raise RuntimeError(result.stderr.strip() or "wpctl status failed")
+        lines = result.stdout.splitlines()
+
+        def pick(patterns: list[str]) -> str | None:
+            for line in lines:
+                l = line.lower()
+                if any(p in l for p in patterns):
+                    m = re.search(r"\b(\d+)\.\s", line)
+                    if m:
+                        return m.group(1)
+            return None
+
+        phone_node = pick(["iphone", "ios", "phone"])
+        peloton_node = pick(["peloton"])
+        output_node = pick(["airpods", "headphones", "buds"])
+
+        if phone_node:
+            self.state.phone_node = phone_node
+        if peloton_node:
+            self.state.peloton_node = peloton_node
+        if output_node:
+            self.state.output_node = output_node
+        self.apply_all_gains()
+        return self.status()
+
     def set_nodes(self, phone_node: str | None, peloton_node: str | None, output_node: str | None) -> dict[str, Any]:
         self.state.phone_node = phone_node
         self.state.peloton_node = peloton_node
