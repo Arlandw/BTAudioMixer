@@ -167,8 +167,8 @@ class AudioEngine:
         if peak < 0.004 and rms < 0.0015:
             level_raw = 0.0
         else:
-            # Blend RMS + peak for visibly responsive meters.
-            level_raw = max(rms * 28.0, peak * 7.0)
+            # Blend RMS + peak for visibly responsive meters without constant saturation.
+            level_raw = max(rms * 8.0, peak * 2.5)
 
         key = str(node_name)
         prev = self._level_smooth.get(key, 0.0)
