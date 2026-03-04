@@ -236,24 +236,33 @@
 
       async function refreshActivity() {
         try {
+          const status = await api('/status');
+          const audio = status.audio || {};
           const levels = await api('/audio/levels');
-          setMeter('phoneMeter', levels.phone_level ?? !!latestBluetooth?.phone?.connected);
-          setMeter('pelotonMeter', levels.peloton_level ?? !!latestBluetooth?.peloton?.connected);
-          setMeter('masterMeter', levels.master_level ?? !!latestBluetooth?.headphones?.connected);
+
+          const phone = (levels.phone_level ?? null);
+          const peloton = (levels.peloton_level ?? null);
+          const master = (levels.master_level ?? null);
+
+          // If node is mapped but sampler returns null, treat as silence (0), not connected-animated fallback.
+          setMeter('phoneMeter', phone ?? (audio.phone_node ? 0 : !!latestBluetooth?.phone?.connected));
+          setMeter('pelotonMeter', peloton ?? (audio.peloton_node ? 0 : !!latestBluetooth?.peloton?.connected));
+          setMeter('masterMeter', master ?? (audio.output_node ? 0 : !!latestBluetooth?.headphones?.connected));
+          return;
+        } catch {}
+
+        try {
+          const data = await api('/audio/activity');
+          const phoneActive = data.phone_active || !!latestBluetooth?.phone?.connected;
+          const pelotonActive = data.peloton_active || !!latestBluetooth?.peloton?.connected;
+          const masterActive = data.master_active || !!latestBluetooth?.headphones?.connected;
+          setMeter('phoneMeter', phoneActive);
+          setMeter('pelotonMeter', pelotonActive);
+          setMeter('masterMeter', masterActive);
         } catch {
-          try {
-            const data = await api('/audio/activity');
-            const phoneActive = data.phone_active || !!latestBluetooth?.phone?.connected;
-            const pelotonActive = data.peloton_active || !!latestBluetooth?.peloton?.connected;
-            const masterActive = data.master_active || !!latestBluetooth?.headphones?.connected;
-            setMeter('phoneMeter', phoneActive);
-            setMeter('pelotonMeter', pelotonActive);
-            setMeter('masterMeter', masterActive);
-          } catch {
-            setMeter('phoneMeter', !!latestBluetooth?.phone?.connected);
-            setMeter('pelotonMeter', !!latestBluetooth?.peloton?.connected);
-            setMeter('masterMeter', !!latestBluetooth?.headphones?.connected);
-          }
+          setMeter('phoneMeter', !!latestBluetooth?.phone?.connected);
+          setMeter('pelotonMeter', !!latestBluetooth?.peloton?.connected);
+          setMeter('masterMeter', !!latestBluetooth?.headphones?.connected);
         }
       }
 
