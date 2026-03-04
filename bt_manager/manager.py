@@ -38,13 +38,23 @@ class BTManager:
         self.peloton = DeviceRole(name="peloton")
         self.headphones = DeviceRole(name="headphones")
 
+        # role -> controller MAC (adapter pinning)
+        self.controller_map: dict[str, str | None] = {
+            "phone": None,
+            "peloton": None,
+            "headphones": None,
+        }
+
         self._load()
         self.refresh_status()
 
-    def _run_btctl(self, commands: list[str]) -> str:
+    def _run_btctl(self, commands: list[str], controller: str | None = None) -> str:
         script = "\n".join(commands + ["quit", ""])
+        cmd = ["bluetoothctl"]
+        if controller:
+            cmd += ["--controller", controller]
         result = subprocess.run(
-            ["bluetoothctl"],
+            cmd,
             input=script,
             text=True,
             capture_output=True,
@@ -53,6 +63,30 @@ class BTManager:
         if result.returncode != 0:
             raise RuntimeError(result.stderr.strip() or "bluetoothctl command failed")
         return result.stdout
+
+    def controllers(self) -> list[dict[str, Any]]:
+        out = self._run_btctl(["list"])
+        ctrls: list[dict[str, Any]] = []
+        for line in out.splitlines():
+            m = re.match(r"^Controller\s+([0-9A-Fa-f:]{17})\s+(.+?)(\s+\[default\])?$", line.strip())
+            if not m:
+                continue
+            ctrls.append({
+                "mac": m.group(1).upper(),
+                "name": m.group(2).strip(),
+                "default": bool(m.group(3)),
+            })
+        return ctrls
+
+    def set_role_controller(self, role: str, controller_mac: str | None) -> dict[str, Any]:
+        slot = self._slot(role)
+        _ = slot  # validate role
+        self.controller_map[role] = controller_mac.upper() if controller_mac else None
+        self._save()
+        return self.status()
+
+    def _role_controller(self, role: str) -> str | None:
+        return self.controller_map.get(role)
 
     def _device_info(self, mac: str) -> str:
         return self._run_btctl([f"info {mac}"])
@@ -89,14 +123,14 @@ class BTManager:
             "default-agent",
             f"pair {slot.mac}",
             f"trust {slot.mac}",
-        ])
+        ], controller=self._role_controller(role))
         self.refresh_status()
         return self.status()
 
     def connect(self, role: str) -> dict[str, Any]:
         slot = self._slot(role)
         self._require_mac(slot)
-        self._run_btctl(["power on", f"connect {slot.mac}"])
+        self._run_btctl(["power on", f"connect {slot.mac}"], controller=self._role_controller(role))
         self.refresh_status()
         return self.status()
 
@@ -111,14 +145,14 @@ class BTManager:
             f"trust {slot.mac}",
             f"pair {slot.mac}",
             f"connect {slot.mac}",
-        ])
+        ], controller=self._role_controller(role))
         self.refresh_status()
         return self.status()
 
     def disconnect(self, role: str) -> dict[str, Any]:
         slot = self._slot(role)
         self._require_mac(slot)
-        self._run_btctl([f"disconnect {slot.mac}"])
+        self._run_btctl([f"disconnect {slot.mac}"], controller=self._role_controller(role))
         self.refresh_status()
         return self.status()
 
@@ -127,7 +161,7 @@ class BTManager:
             slot = self._slot(role)
             if slot.mac:
                 try:
-                    self._run_btctl([f"connect {slot.mac}"])
+                    self._run_btctl([f"connect {slot.mac}"], controller=self._role_controller(role))
                 except RuntimeError:
                     continue
         self.refresh_status()
@@ -158,16 +192,14 @@ class BTManager:
             else:
                 slot.connected = False
 
-            # fallback: alias-name match when MAC rotates/randomizes (common on phones)
             if not slot.connected and slot.alias:
                 slot.connected = any(slot.alias.lower() in d["name"].lower() for d in connected_devices)
 
-            # best-effort role inference when no MAC saved yet
             if not slot.connected and not slot.mac:
                 keywords = {
                     "phone": ["iphone", "ios", "phone"],
                     "peloton": ["peloton"],
-                    "headphones": ["airpods", "headphone", "buds"],
+                    "headphones": ["airpods", "headphone", "buds", "nothing"],
                 }[slot.name]
                 match = next((d for d in connected_devices if any(k in d["name"].lower() for k in keywords)), None)
                 if match:
@@ -190,9 +222,7 @@ class BTManager:
         return {"pairing_mode": True, "seconds": seconds}
 
     def scan(self, seconds: int = 6) -> list[dict[str, str]]:
-        """Scan nearby devices and return [{mac,name}]."""
         seconds = max(2, min(int(seconds), 20))
-        # Use shell timeout for bounded scan window.
         cmd = (
             f"timeout {seconds}s bluetoothctl --timeout {seconds} scan on >/tmp/bt_scan.out 2>&1; "
             "bluetoothctl devices"
@@ -204,7 +234,6 @@ class BTManager:
         devices: list[dict[str, str]] = []
         seen: set[str] = set()
         for line in result.stdout.splitlines():
-            # Device AA:BB:CC:DD:EE:FF Name Here
             m = re.match(r"^Device\s+([0-9A-Fa-f:]{17})\s+(.+)$", line.strip())
             if not m:
                 continue
@@ -220,6 +249,8 @@ class BTManager:
             "phone": asdict(self.phone),
             "peloton": asdict(self.peloton),
             "headphones": asdict(self.headphones),
+            "controllers": self.controllers(),
+            "controller_map": self.controller_map,
             "connected_devices": self._connected_devices(),
         }
 
@@ -249,3 +280,8 @@ class BTManager:
                 slot.alias = payload[role].get("alias")
                 slot.connected = bool(payload[role].get("connected", False))
                 slot.paired = bool(payload[role].get("paired", False))
+        if isinstance(payload.get("controller_map"), dict):
+            for role in ("phone", "peloton", "headphones"):
+                if role in payload["controller_map"]:
+                    value = payload["controller_map"].get(role)
+                    self.controller_map[role] = value.upper() if isinstance(value, str) else None

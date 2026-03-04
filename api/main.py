@@ -57,6 +57,11 @@ class PairingModeRequest(BaseModel):
     seconds: int = 120
 
 
+class ControllerAssignRequest(BaseModel):
+    role: str
+    controller_mac: str | None = None
+
+
 @app.get("/health")
 def health():
     return {"ok": True}
@@ -134,6 +139,25 @@ def bt_pairing_mode(payload: PairingModeRequest | None = None):
     try:
         seconds = payload.seconds if payload else 120
         return bt.enable_pairing_mode(seconds=seconds)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.get("/bt/controllers")
+def bt_controllers():
+    try:
+        return {
+            "controllers": bt.controllers(),
+            "controller_map": bt.controller_map,
+        }
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/bt/assign-controller")
+def bt_assign_controller(payload: ControllerAssignRequest):
+    try:
+        return bt.set_role_controller(payload.role, payload.controller_mac)
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 

@@ -76,6 +76,16 @@
           <div class="small">For phone/peloton: enable pairing mode here, then connect from those devices to this mixer.</div>
         </div>
       </div>
+      <div class="row">
+        <div class="card">
+          <h3>Adapter Pinning</h3>
+          <div class="small">Pin input/output roles to specific Bluetooth adapters.</div>
+          <select class="mac" id="ctrl-phone"></select>
+          <button class="btn" onclick="assignController('phone', this)">Set Phone Adapter</button>
+          <select class="mac" id="ctrl-headphones"></select>
+          <button class="btn" onclick="assignController('headphones', this)">Set Headphones Adapter</button>
+        </div>
+      </div>
       <div class="row" id="roles"></div>
 
       <div class="card">
@@ -111,6 +121,8 @@
       const roles = ['phone', 'peloton', 'headphones'];
       let discoveredDevices = [];
       let latestBluetooth = {};
+      let controllers = [];
+      let controllerMap = {};
       const draftMacs = { phone: '', peloton: '', headphones: '' };
       let suspendRefreshUntil = 0;
       const meterDynamics = {
@@ -185,6 +197,30 @@
             <div>${actions}</div>
           </div>
         `;
+      }
+
+      function renderControllers() {
+        const options = ['<option value="">(default adapter)</option>']
+          .concat(controllers.map((c) => `<option value="${c.mac}">${c.name} (${c.mac})${c.default ? ' [default]' : ''}</option>`))
+          .join('');
+
+        ['phone', 'headphones'].forEach((role) => {
+          const el = document.getElementById(`ctrl-${role}`);
+          if (!el) return;
+          el.innerHTML = options;
+          el.value = controllerMap?.[role] || '';
+        });
+      }
+
+      async function refreshControllers() {
+        try {
+          const data = await api('/bt/controllers');
+          controllers = data.controllers || [];
+          controllerMap = data.controller_map || {};
+          renderControllers();
+        } catch (e) {
+          setStatus(`Controller load failed: ${e.message || e}`);
+        }
       }
 
       async function refresh() {
@@ -335,6 +371,16 @@
         });
       }
 
+      async function assignController(role, btn) {
+        await withButton(btn, 'Setting...', async () => {
+          const sel = document.getElementById(`ctrl-${role}`);
+          const controller_mac = sel?.value || null;
+          await api('/bt/assign-controller', { role, controller_mac });
+          setStatus(`${role} adapter pinned.`);
+          await refreshControllers();
+        });
+      }
+
       async function assignRole(role, btn) {
         await withButton(btn, 'Saving...', async () => {
           const mac = document.getElementById(`mac-${role}`).value.trim();
@@ -386,9 +432,11 @@
         saveGains();
       }
 
+      refreshControllers();
       refresh();
       refreshActivity();
       setInterval(refresh, 5000);
+      setInterval(refreshControllers, 15000);
       setInterval(refreshActivity, 400);
     </script>
   </body>
